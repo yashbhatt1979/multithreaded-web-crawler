@@ -1,0 +1,10 @@
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\config\CrawlerConfig.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\controller\CrawlerController.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\crawler\CrawlerEngine.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\crawler\CrawlerTask.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\crawler\UrlQueue.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\CrawlerApplication.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\model\CrawledPage.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\parser\HtmlParser.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\repository\CrawledPageRepository.java
+C:\Users\Yashbhatt\Desktop\multithreaded-web-crawler\src\main\java\com\example\crawler\service\CrawlerService.java
