@@ -13,48 +13,114 @@ A Java-based multithreaded web crawler built using Spring Boot.
 
 ## Features
 
+* REST API for starting a crawl
 * Multithreaded web crawling
 * Thread-safe URL management
 * HTML parsing
 * Duplicate URL detection
 * MySQL data storage
-* REST API
 
-## Current API
+## Current Progress
 
-### POST /crawl
+* [x] Spring Boot project setup
+* [x] `CrawlerApplication` created
+* [x] `CrawlerController` created
+* [x] `CrawlerService` created
+* [x] Controller → Service communication tested successfully
+* [ ] Crawler Engine
+* [ ] Webpage fetching using JSoup
+* [ ] HTML parsing
+* [ ] URL extraction
+* [ ] Duplicate URL detection
+* [ ] Multithreading
+* [ ] MySQL integration
+* [ ] Complete crawler workflow
 
-Accepts a URL as a request parameter.
+## Project Structure
 
-Example:
+```text
+multithreaded-web-crawler/
+│
+├── src/
+│   └── main/
+│       ├── java/
+│       │   └── com/
+│       │       └── example/
+│       │           └── crawler/
+│       │               ├── CrawlerApplication.java
+│       │               │
+│       │               ├── controller/
+│       │               │   └── CrawlerController.java
+│       │               │
+│       │               └── service/
+│       │                   └── CrawlerService.java
+│       │
+│       └── resources/
+│           └── application.properties
+│
+├── pom.xml
+├── mvnw
+├── mvnw.cmd
+├── .gitignore
+└── README.md
+```
 
-POST /crawl?url=https://example.com
+## Current Request Flow
 
-Current response:
+```text
+Postman
+   ↓
+HTTP Request
+   ↓
+Tomcat
+   ↓
+CrawlerController
+   ↓
+CrawlerService
+   ↓
+Crawler Engine
+   ↓
+JSoup
+   ↓
+MySQL
+```
 
-Received URL : https://example.com
+## API
 
-> The endpoint currently verifies that the URL is successfully received. Actual crawling functionality will be implemented in the next stages.
+### Start Crawling
 
-## Project Status
+**Endpoint:**
 
-🚧 Under Development
+```text
+POST /crawl
+```
 
-### Completed
+**Example:**
 
-* Initial Maven project setup
-* Spring Boot application configuration
-* REST Controller implementation
-* `/crawl` POST endpoint
-* URL request parameter handling
+```text
+POST http://localhost:8080/crawl?url=https://example.com
+```
 
-### Coming Next
+The request is currently handled by `CrawlerController`, which passes the URL to `CrawlerService`.
 
-* Crawler Service
-* Webpage fetching
-* JSoup HTML parsing
-* URL extraction
-* Duplicate URL detection
-* Multithreaded crawling
-* Thread-safe URL management
-* MySQL database integration
+## Running the Project
+
+Make sure Java 17 and Maven are installed.
+
+Run the application using:
+
+```bash
+mvn spring-boot:run
+```
+
+The application runs by default on:
+
+```text
+http://localhost:8080
+```
+
+## Development Status
+
+The basic Spring Boot REST layer has been completed and tested successfully.
+
+The next stage is implementing the `CrawlerEngine`, which will handle webpage fetching and crawling logic.
