@@ -6,5 +6,5 @@ com\example\crawler\controller\CrawlerController.class
 com\example\crawler\CrawlerApplication.class
 com\example\crawler\service\CrawlerService.class
 main\java\com\example\crawler\crawler\UrlQueue.class
-main\java\com\example\crawler\crawler\CrawlerEngine.class
 main\java\com\example\crawler\model\CrawledPage.class
+com\example\crawler\crawler\CrawlerEngine.class
