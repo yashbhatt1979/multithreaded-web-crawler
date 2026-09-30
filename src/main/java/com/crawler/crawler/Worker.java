@@ -1,5 +1,10 @@
 package com.crawler.crawler;
 
+import java.time.LocalDateTime;
+import java.util.Set;
+
+import org.jsoup.nodes.Document;
+
 import com.crawler.concurrency.CrawlCoordinator;
 import com.crawler.model.CrawledPage;
 import com.crawler.model.UrlStatus;
@@ -10,23 +15,19 @@ import com.crawler.service.UrlFetcherService;
 public class Worker implements Runnable {
 
     private final CrawlTask task;
-    private final CrawlQueue crawlQueue;
     private final CrawlCoordinator crawlCoordinator;
-
     private final UrlFetcherService urlFetcherService;
     private final ScraperService scraperService;
     private final CrawledPageRepository crawledPageRepository;
 
     public Worker(
             CrawlTask task,
-            CrawlQueue crawlQueue,
             CrawlCoordinator crawlCoordinator,
             UrlFetcherService urlFetcherService,
             ScraperService scraperService,
             CrawledPageRepository crawledPageRepository
     ) {
         this.task = task;
-        this.crawlQueue = crawlQueue;
         this.crawlCoordinator = crawlCoordinator;
         this.urlFetcherService = urlFetcherService;
         this.scraperService = scraperService;
@@ -37,77 +38,223 @@ public class Worker implements Runnable {
     public void run() {
 
         String url = task.getUrl();
+        int depth = task.getDepth();
+
+        String threadName =
+                Thread.currentThread().getName();
+
+        /*
+         * If the crawler has already been stopped before
+         * this worker starts, do not process the task.
+         *
+         * The Redis message is intentionally NOT ACKed.
+         * It can remain pending for recovery.
+         */
+        if (!crawlCoordinator.isRunning()) {
+
+            System.out.println(
+                    threadName
+                            + " skipping task because crawler is stopped: "
+                            + url
+            );
+
+            return;
+        }
+
+        System.out.println(
+                threadName
+                        + " visiting: "
+                        + url
+                        + " | depth="
+                        + depth
+        );
 
         try {
 
-            // 1. Print URL being visited
-            System.out.println(
-                    Thread.currentThread().getName()
-                            + " visiting: " + url
-            );
+            // =================================================
+            // FETCH
+            // =================================================
 
-            // 2. Fetch webpage
             UrlFetcherService.FetchResult fetchResult =
                     urlFetcherService.fetch(url);
 
-            String html = fetchResult.getHtml();
+            String html =
+                    fetchResult.getHtml();
 
-            int statusCode = fetchResult.getStatusCode();
+            int statusCode =
+                    fetchResult.getStatusCode();
 
-            // 3. Scrape webpage
-            ScraperService.ScrapingResult crawlResult =
-                    scraperService.scrape(html, url);
+            // =================================================
+            // SCRAPE
+            // =================================================
 
-            // 4. Extract page information
-            String title =
-                    crawlResult.getDocument().title();
-
-            String description =
-                    crawlResult.getDocument()
-                            .select("meta[name=description]")
-                            .attr("content");
-
-            String content =
-                    crawlResult.getDocument().html();
-
-            // 5. Create CrawledPage
-            CrawledPage crawledPage =
-                    new CrawledPage(
-                            url,
-                            statusCode,
-                            title,
-                            content,
-                            0,
-                            UrlStatus.CRAWLED
+            ScraperService.ScrapingResult result =
+                    scraperService.scrape(
+                            html,
+                            url
                     );
 
-            crawledPage.setDescription(description);
+            Document document =
+                    result.getDocument();
 
-            // 6. Save page to database
-            crawledPageRepository.save(crawledPage);
+            // =================================================
+            // SAVE PAGE
+            // =================================================
 
-            System.out.println(
-                    Thread.currentThread().getName()
-                            + " saved: " + url
+            CrawledPage page =
+                    new CrawledPage();
+
+            page.setUrl(url);
+
+            page.setStatusCode(statusCode);
+
+            page.setTitle(
+                    document.title()
             );
 
-            // 7. Submit discovered URLs
-            for (String discoveredUrl : crawlResult.getLinks()) {
+            page.setDescription(
+                    document
+                            .select("meta[name=description]")
+                            .attr("content")
+            );
 
-                crawlCoordinator.submitTask(
-                        new CrawlTask(discoveredUrl)
+            page.setContent(
+                    document.text()
+            );
+
+            page.setDepth(depth);
+
+            page.setStatus(
+                    UrlStatus.CRAWLED
+            );
+
+            page.setCrawledAt(
+                    LocalDateTime.now()
+            );
+
+            crawledPageRepository.save(page);
+
+            // =================================================
+            // DISCOVER LINKS
+            // =================================================
+
+            Set<String> links =
+                    result.getLinks();
+
+            System.out.println(
+                    threadName
+                            + " discovered "
+                            + links.size()
+                            + " links from "
+                            + url
+            );
+
+            // =================================================
+            // SUBMIT DISCOVERED LINKS
+            // =================================================
+
+            /*
+             * Check the crawler state before generating
+             * additional work.
+             *
+             * If /stop was called while this page was being
+             * processed, the current page can finish but
+             * newly discovered URLs will NOT be submitted.
+             */
+            if (crawlCoordinator.isRunning()) {
+
+                for (String discoveredUrl : links) {
+
+                    /*
+                     * Check again for every URL.
+                     *
+                     * This prevents a large batch of links
+                     * from continuing to enter Redis after
+                     * /stop is called.
+                     */
+                    if (!crawlCoordinator.isRunning()) {
+
+                        System.out.println(
+                                threadName
+                                        + " stopping link submission because "
+                                        + "crawler was stopped."
+                        );
+
+                        break;
+                    }
+
+                    if (discoveredUrl == null ||
+                            discoveredUrl.isBlank()) {
+
+                        continue;
+                    }
+
+                    CrawlTask newTask =
+                            new CrawlTask(
+                                    discoveredUrl,
+                                    depth + 1
+                            );
+
+                    crawlCoordinator.submitTask(
+                            newTask
+                    );
+                }
+
+            } else {
+
+                System.out.println(
+                        threadName
+                                + " crawler stopped. "
+                                + "No new links submitted from: "
+                                + url
                 );
             }
 
+            // =================================================
+            // ACK REDIS MESSAGE
+            // =================================================
+
+            /*
+             * The current page was successfully:
+             *
+             * 1. fetched
+             * 2. scraped
+             * 3. saved
+             *
+             * Therefore the original Redis task can be ACKed.
+             *
+             * If the crawler was stopped after the page was
+             * successfully processed, we still ACK this
+             * completed task.
+             */
+            crawlCoordinator.acknowledgeTask(
+                    task
+            );
+
+            System.out.println(
+                    threadName
+                            + " completed: "
+                            + url
+            );
+
         } catch (Exception e) {
 
+            /*
+             * DO NOT ACK failed tasks.
+             *
+             * The Redis Stream message remains in the
+             * Pending Entries List and can be recovered
+             * after the configured idle period.
+             */
             System.err.println(
-                    Thread.currentThread().getName()
-                            + " failed to crawl URL: " + url
+                    threadName
+                            + " failed to crawl URL: "
+                            + url
             );
 
             System.err.println(
-                    "Reason: " + e.getMessage()
+                    "Reason: "
+                            + e.getMessage()
             );
         }
     }

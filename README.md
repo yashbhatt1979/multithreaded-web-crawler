@@ -1,1065 +1,778 @@
-# 🕷️ Multithreaded Web Crawler & Scraper
+Multithreaded Distributed Web Crawler & Scraper
 
-A **multithreaded web crawler and scraper** built using **Java 17 and Spring Boot**.
+A production-oriented multithreaded and horizontally scalable web
+crawler and scraper built with Java and Spring Boot.
 
-The system starts from a seed URL, fetches web pages, extracts links, manages discovered URLs through a thread-safe queue, prevents duplicate crawling using a visited set, and processes multiple URLs concurrently using a configurable thread pool.
+The project is designed to demonstrate practical concepts in
+concurrency, distributed systems, Redis coordination, web scraping,
+URL deduplication, content hashing, URL canonicalization, Docker-based
+horizontal scaling, and persistent storage with MySQL.
 
-The project also includes **HTML scraping, retry and backoff handling, concurrency control, persistence, and failure handling**.
+🚀 Project Overview
 
----
+The crawler accepts a seed URL, fetches the page, extracts useful
+information and links, stores the crawled page in MySQL, and distributes
+newly discovered URLs across multiple crawler instances.
 
-## 🚀 Features
+The system combines:
 
-* 🌐 Crawl websites starting from a seed URL
-* 🔗 Extract links from HTML pages
-* 🕷️ Recursively discover and crawl new URLs
-* ⚡ Multithreaded URL processing
-* 🧵 Configurable thread pool
-* 📋 Thread-safe crawl queue
-* ✅ Visited URL tracking
-* 🔒 Concurrency-safe URL processing
-* 🔄 Retry mechanism for temporary failures
-* ⏳ Backoff when servers return `429 Too Many Requests`
-* 🧹 HTML parsing and text extraction using JSoup
-* 💾 Store crawled pages in MySQL
-* 📊 Track crawl status
-* ❌ Handle failed URLs gracefully
-* 🛑 Prevent duplicate crawling
-* 🧩 Modular Spring Boot architecture
-* 📈 Designed with scalability and concurrency in mind
+Multithreaded crawling
 
----
+Distributed URL coordination
 
-# 🏗️ Architecture
+Redis-backed task distribution
 
-```text
-                         ┌─────────────────────┐
-                         │      Seed URL       │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │  Crawl Coordinator  │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │    Crawl Queue      │
-                         │  Thread-Safe Queue  │
-                         └──────────┬──────────┘
-                                    │
-                    ┌───────────────┼───────────────┐
-                    │               │               │
-                    ▼               ▼               ▼
-              ┌──────────┐    ┌──────────┐    ┌──────────┐
-              │ Worker 1 │    │ Worker 2 │    │ Worker N │
-              └─────┬────┘    └─────┬────┘    └─────┬────┘
-                    │               │               │
-                    └───────────────┼───────────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │    UrlFetcher       │
-                         │   HTTP Request      │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │      JSoup          │
-                         │   HTML Parsing      │
-                         └──────────┬──────────┘
-                                    │
-                       ┌────────────┴────────────┐
-                       │                         │
-                       ▼                         ▼
-              ┌─────────────────┐       ┌─────────────────┐
-              │ Extract Content  │       │ Extract Links   │
-              └────────┬────────┘       └────────┬────────┘
-                       │                         │
-                       ▼                         ▼
-              ┌─────────────────┐       ┌─────────────────┐
-              │     MySQL       │       │  Crawl Queue    │
-              │  Crawled Pages  │       │ New URLs        │
-              └─────────────────┘       └─────────────────┘
-```
+Horizontal scaling
 
----
+URL canonicalization
 
-# 🔄 Crawling Flow
+Distributed URL deduplication
 
-The crawler follows this general workflow:
+Content hashing
 
-```text
-Seed URL
-   ↓
-Add URL to Crawl Queue
-   ↓
-Worker takes URL
-   ↓
-Check Visited Set
-   ↓
-Fetch HTML
-   ↓
-HTTP Response
-   ↓
- ┌───────────────┐
- │               │
- ▼               ▼
-Success         Failure
- │               │
- ▼               ▼
-Parse HTML     Retry
- │               │
- ├─────────┐     ▼
- │         │   Backoff
- ▼         ▼     │
-Text     Links   ▼
- │         │   Retry
- │         │
- ▼         ▼
-Save DB   Add new URLs
-             │
-             ▼
-        Crawl Queue
-```
+HTML parsing with JSoup
 
----
+MySQL persistence
 
-# 🧵 Multithreading
+Flyway database migrations
 
-The crawler uses multiple worker threads to process URLs concurrently.
+Docker and Docker Compose
 
-Instead of:
+Redis Streams / consumer groups
 
-```text
-URL 1 → URL 2 → URL 3 → URL 4
-```
+Graceful start and stop controls
 
-the crawler can process:
+Crawl depth tracking
 
-```text
-             ┌── URL 1 ── Worker 1
-             │
-Queue ───────┼── URL 2 ── Worker 2
-             │
-             ├── URL 3 ── Worker 3
-             │
-             └── URL 4 ── Worker 4
-```
+HTTP status tracking
 
-This allows multiple pages to be fetched and processed simultaneously.
+🏗️ High-Level Architecture
 
-The number of worker threads can be configured through the application configuration.
+                         Client / Postman
+                                |
+                                | POST /api/crawler/start
+                                v
+                    +-------------------------+
+                    |    Crawler Service      |
+                    +-------------------------+
+                                |
+                                | START command
+                                v
+                    +-------------------------+
+                    |        Redis            |
+                    |  Control + Coordination |
+                    +-------------------------+
+                                |
+              +-----------------+-----------------+
+              |                 |                 |
+              v                 v                 v
+        +-----------+     +-----------+     +-----------+
+        | crawler-1 |     | crawler-2 |     | crawler-3 |
+        +-----------+     +-----------+     +-----------+
+              |                 |                 |
+              +-----------------+-----------------+
+                                |
+                        Redis Task Distribution
+                                |
+                                v
+                       +------------------+
+                       |   Worker Pool    |
+                       +------------------+
+                                |
+                                v
+                       +------------------+
+                       | URL Fetcher      |
+                       | Java HttpClient  |
+                       +------------------+
+                                |
+                                v
+                       +------------------+
+                       | JSoup Scraper    |
+                       +------------------+
+                                |
+                 +--------------+--------------+
+                 |                             |
+                 v                             v
+          Canonicalized URLs             Extracted Data
+                 |                             |
+                 v                             v
+             Redis SET                    MySQL
+          Deduplication                crawled_pages
 
----
+✨ Key Features
 
-# 🔒 Concurrency Handling
+1. Multithreaded Crawling
 
-Since multiple worker threads access shared resources, concurrency must be handled carefully.
+Each crawler instance uses a local worker pool to process multiple URLs
+concurrently.
 
-The project handles shared state such as:
+This allows multiple pages to be fetched and processed at the same time
+instead of crawling sequentially.
 
-* Crawl Queue
-* Visited URLs
-* Crawl status
-* Database operations
-* Task submission
+Crawler Instance
+      |
+      +-- Worker 1
+      +-- Worker 2
+      +-- Worker 3
+      +-- Worker 4
+      +-- Worker 5
+      ...
 
-The goal is to prevent:
+Thread-safe data structures and concurrent processing are used to
+coordinate local crawling.
 
-* Duplicate crawling
-* Race conditions
-* Inconsistent state
-* Unsafe access to shared collections
-* Multiple workers processing the same URL simultaneously
+2. Horizontal Scaling
 
-A URL should effectively transition through:
+The crawler is designed to run multiple application instances
+simultaneously.
 
-```text
-DISCOVERED
-     ↓
-QUEUED
-     ↓
-CRAWLING
-     ↓
-CRAWLED
-```
+Example:
 
-or:
+                    Redis
+                      |
+        +-------------+-------------+
+        |             |             |
+        v             v             v
+    crawler-1     crawler-2     crawler-3
+        |             |             |
+     workers       workers       workers
 
-```text
-CRAWLING
-    ↓
-FAILED
-```
+Additional crawler containers can be started without changing the
+crawler's core logic.
 
----
+The instances coordinate through Redis rather than maintaining
+independent crawling state.
 
-# 🌐 URL Fetching
+3. Distributed URL Deduplication
 
-The `UrlFetcherService` is responsible for fetching web pages.
+A Redis Set is used as the distributed visited-URL registry:
 
-The basic flow is:
+crawler:visited
 
-```text
+When a URL is submitted:
+
 URL
- ↓
-HTTP Request
- ↓
-HTTP Response
- ↓
+ |
+ v
+Redis SADD
+ |
+ +-- 1 → URL was new
+ |
+ +-- 0 → URL already exists
+
+This prevents multiple crawler instances from unnecessarily processing
+the same canonical URL.
+
+4. URL Canonicalization
+
+The project now canonicalizes URLs before distributed deduplication.
+
+Examples:
+
+HTTPS://Example.COM/page
+        ↓
+https://example.com/page
+
+https://example.com/page#section
+        ↓
+https://example.com/page
+
+https://example.com/page?utm_source=google
+        ↓
+https://example.com/page
+
+Default ports are also normalized:
+
+https://example.com:443/page
+        ↓
+https://example.com/page
+
+Meaningful query parameters are preserved:
+
+https://example.com/product?id=123
+
+remains:
+
+https://example.com/product?id=123
+
+The crawler uses a dedicated UrlCanonicalizer service based on Java's
+URI API.
+
+Canonicalization flow
+
+Discovered Link
+      |
+      v
+UrlCanonicalizer
+      |
+      v
+Canonical URL
+      |
+      v
+Redis Deduplication
+      |
+      v
+Crawl Queue
+
+5. Content Hashing
+
+The crawler stores a hash representing the crawled page content.
+
+This provides a compact way to identify identical content and can be
+used for future duplicate-content detection and change detection.
+
+Conceptually:
+
 HTML Content
-```
+     |
+     v
+Content Hash
+     |
+     v
+MySQL
 
-The crawler handles common HTTP failures such as:
+The database model contains a contentHash field associated with the
+crawled page.
 
-```text
-429 Too Many Requests
-403 Forbidden
-4xx Client Errors
-5xx Server Errors
-Connection failures
-Timeouts
-```
+6. Redis-Based Distributed Task Processing
 
-Temporary failures can trigger retry and backoff logic.
+Redis is used as the coordination layer between crawler instances.
 
----
+The architecture uses Redis Streams and consumer groups to distribute
+crawling work.
 
-# 🔄 Retry & Backoff
+                  Redis Stream
+                       |
+        +--------------+--------------+
+        |              |              |
+        v              v              v
+     crawler-1      crawler-2      crawler-3
+     consumer       consumer       consumer
 
-When a server temporarily rejects requests, such as:
+This allows work to be distributed across multiple application
+instances.
 
-```text
-HTTP 429 Too Many Requests
-```
+Redis also supports:
 
-the crawler does not immediately continue sending requests.
+Distributed visited URL tracking
 
-Instead:
+Control commands
 
-```text
-Request
-   ↓
-429
-   ↓
-Wait / Backoff
-   ↓
-Retry
-   ↓
-Success
-   ↓
-Parse HTML
-```
+Task distribution
 
-This reduces unnecessary load on the target server and improves crawler reliability.
+Consumer recovery / pending task handling
 
----
+7. Redis Consumer Threads
 
-# 🧹 Web Scraping
+Each crawler instance runs multiple Redis consumer threads.
 
-The crawler uses **JSoup** to parse HTML.
+The current configuration uses:
 
-The fetched HTML can be processed to extract:
+3 Redis consumer threads / instance
 
-### Page Content
+With three crawler instances:
 
-```text
-Title
-Text
-Metadata
-```
+crawler-1 → 3 consumers
+crawler-2 → 3 consumers
+crawler-3 → 3 consumers
 
-### Links
+Total → 9 Redis consumers
 
-```html
-<a href="https://example.com/page">
-```
+8. HTML Scraping
 
-The crawler extracts these links and converts them into URLs that can be added to the crawl queue.
+JSoup is used for HTML parsing.
 
----
+The scraper extracts:
 
-# 🔗 Link Discovery
+Page title
 
-Suppose the seed URL is:
+Meta description
 
-```text
-https://example.com
-```
+Page content
 
-and the page contains:
+Links
 
-```text
-/page1
-/page2
-/products
-/about
-```
+HTTP status
 
-The crawler discovers:
+Crawl depth
 
-```text
-https://example.com/page1
-https://example.com/page2
-https://example.com/products
-https://example.com/about
-```
+The general flow is:
 
-These URLs are then added to the crawl queue.
+HTML
+ |
+ v
+JSoup Document
+ |
+ +----> Title
+ |
+ +----> Description
+ |
+ +----> Content
+ |
+ +----> Links
 
-The process continues recursively:
+9. Crawl Depth Tracking
 
-```text
+Each CrawlTask contains a depth value.
+
+Example:
+
 Seed URL
-   ↓
-Discover Links
-   ↓
-Queue Links
-   ↓
-Workers Crawl Links
-   ↓
-Discover More Links
-   ↓
-Queue New Links
-   ↓
-Continue
-```
+Depth 0
+   |
+   +-- Link A
+   |    Depth 1
+   |
+   +-- Link B
+        Depth 1
+        |
+        +-- Link C
+             Depth 2
 
----
+This allows the crawler to control how far it follows links from the
+original seed.
 
-# ✅ Visited URL Tracking
+10. Persistent Storage
 
-The crawler maintains a **visited set** to prevent processing the same URL multiple times.
+Crawled page information is stored in MySQL.
 
-For example:
+The crawled_pages table stores information such as:
 
-```text
-URL A
- ↓
-URL B
- ↓
-URL C
- ↓
-URL A
-```
-
-Without a visited set, the crawler could repeatedly crawl:
-
-```text
-A → B → C → A → B → C → ...
-```
-
-With visited tracking:
-
-```text
-A → B → C
-        ↓
-      A already visited
-        ↓
-       Skip
-```
-
-This prevents duplicate crawling and unnecessary network requests.
-
----
-
-# 💾 Database
-
-The crawler uses **MySQL** to persist information about crawled pages.
-
-Example information stored:
-
-```text
 URL
-Page Title
-Page Content
-HTTP Status
-Crawl Status
-Crawled At
-```
 
-The database allows crawl results to survive application restarts and provides a persistent record of processed pages.
-
----
-
-# 🗄️ Database Migration
-
-Database schema management is handled using **Flyway**.
-
-Migration files are stored under:
-
-```text
-src/main/resources/db/migration/
-```
-
-Example:
-
-```text
-V1__create_crawled_pages.sql
-```
-
-Flyway automatically applies database migrations when the application starts.
-
----
-
-# 📁 Project Structure
-
-```text
-multithreaded-web-crawler/
-│
-├── pom.xml
-├── README.md
-│
-└── src/
-    ├── main/
-    │   ├── java/
-    │   │   └── com/
-    │   │       └── crawler/
-    │   │
-    │   │       ├── config/
-    │   │       │   └── CrawlerConfig.java
-    │   │       │
-    │   │       ├── concurrency/
-    │   │       │   ├── ThreadPoolConfig.java
-    │   │       │   ├── CrawlTaskExecutor.java
-    │   │       │   └── CrawlCoordinator.java
-    │   │       │
-    │   │       ├── controller/
-    │   │       │
-    │   │       ├── crawler/
-    │   │       │   ├── CrawlTask.java
-    │   │       │   ├── CrawlQueue.java
-    │   │       │   ├── Worker.java
-    │   │       │   └── CrawlerEngine.java
-    │   │       │
-    │   │       ├── exception/
-    │   │       │   └── FetchFailedException.java
-    │   │       │
-    │   │       ├── model/
-    │   │       │   ├── CrawlResult.java
-    │   │       │   ├── CrawledPage.java
-    │   │       │   └── UrlStatus.java
-    │   │       │
-    │   │       ├── repository/
-    │   │       │   └── CrawledPageRepository.java
-    │   │       │
-    │   │       ├── scraper/
-    │   │       │   ├── HtmlParser.java
-    │   │       │   ├── LinkExtractor.java
-    │   │       │   └── DataExtractor.java
-    │   │       │
-    │   │       ├── service/
-    │   │       │   └── UrlFetcherService.java
-    │   │       │
-    │   │       └── MultithreadedWebCrawlerApplication.java
-    │   │
-    │   └── resources/
-    │       ├── application.properties
-    │       └── db/
-    │           └── migration/
-    │               └── V1__create_crawled_pages.sql
-    │
-    └── test/
-        └── java/
-```
-
----
-
-# 🧩 Core Components
-
-## `CrawlerEngine`
-
-Acts as the main crawling engine.
-
-Responsible for:
-
-* Starting the crawl
-* Managing crawling lifecycle
-* Submitting crawl tasks
-* Coordinating workers
-
----
-
-## `CrawlTask`
-
-Represents a single unit of crawling work.
-
-Conceptually:
-
-```text
-CrawlTask
-    ↓
-represents
-    ↓
-"Process this URL"
-```
-
-Example:
-
-```text
-CrawlTask
-URL = https://example.com
-```
-
-It can then be submitted to the executor.
-
----
-
-## `CrawlQueue`
-
-Maintains URLs waiting to be processed.
-
-```text
-Discovered URLs
-      ↓
-CrawlQueue
-      ↓
-Workers
-```
-
-The queue must be thread-safe because multiple workers may access it concurrently.
-
----
-
-## `Worker`
-
-A worker processes crawling tasks.
-
-Conceptually:
-
-```text
-Worker
-  ↓
-Take CrawlTask
-  ↓
-Fetch URL
-  ↓
-Parse HTML
-  ↓
-Extract links
-  ↓
-Persist result
-  ↓
-Queue new URLs
-```
-
-Multiple workers execute concurrently.
-
----
-
-## `CrawlCoordinator`
-
-Coordinates the interaction between:
-
-```text
-Crawler Engine
-      ↓
-Task Executor
-      ↓
-Workers
-      ↓
-Crawl Tasks
-```
-
-It helps control task submission and the overall crawling process.
-
----
-
-## `UrlFetcherService`
-
-Responsible for making HTTP requests.
-
-```text
-URL
- ↓
-HTTP Client
- ↓
-HTTP Response
- ↓
-HTML
-```
-
-It also handles failures, retries and backoff behavior.
-
----
-
-## `HtmlParser`
-
-Responsible for parsing the downloaded HTML using JSoup.
-
-```text
-HTML
- ↓
-JSoup
- ↓
-DOM
-```
-
----
-
-## `LinkExtractor`
-
-Extracts hyperlinks from the parsed HTML.
-
-```text
-HTML
- ↓
-JSoup
- ↓
-<a href="...">
- ↓
-URL
-```
-
----
-
-## `DataExtractor`
-
-Extracts useful information from a web page, such as:
-
-```text
 Title
-Text
-Metadata
-```
 
----
+Description
 
-## `CrawledPageRepository`
+Content
 
-Responsible for database operations related to crawled pages.
+HTTP status
 
-It communicates with MySQL through Spring Data JPA.
+Crawl depth
 
----
+Content hash
 
-# ⚙️ Technology Stack
+Crawl status
 
-| Technology      | Purpose                   |
-| --------------- | ------------------------- |
-| Java 17         | Programming language      |
-| Spring Boot     | Application framework     |
-| Maven           | Dependency management     |
-| JSoup           | HTML parsing and scraping |
-| Spring Data JPA | Database access           |
-| MySQL           | Persistent storage        |
-| Flyway          | Database migrations       |
-| JUnit           | Testing                   |
-| Git             | Version control           |
+Crawl timestamp
 
----
+A unique constraint on the URL provides an additional database-level
+protection against duplicate records.
 
-# 🛠️ Prerequisites
+11. Flyway Database Migrations
 
-Make sure the following are installed:
+Flyway is used to manage database schema changes.
 
-* Java 17+
-* Maven
-* MySQL 8+
-* Git
-
-Verify Java:
-
-```bash
-java -version
-```
-
-Verify Maven:
-
-```bash
-mvn -version
-```
-
----
-
-# 🗄️ Database Setup
-
-Create the database:
-
-```sql
-CREATE DATABASE web_crawler;
-```
-
-Configure the database in:
-
-```text
-src/main/resources/application.properties
-```
+This allows the database structure to evolve through versioned migration
+files rather than manually modifying the database.
 
 Example:
 
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/web_crawler
-spring.datasource.username=root
-spring.datasource.password=YOUR_PASSWORD
-```
+src/main/resources/db/migration/
 
-Flyway will automatically execute the migration scripts.
+V1__create_crawled_pages.sql
+V2__...
+V3__...
 
----
+12. Dockerized Deployment
 
-# ▶️ Running the Application
+The project is designed to run using Docker Compose.
 
-Clone the repository:
+Typical services include:
 
-```bash
-git clone <repository-url>
-```
+crawler-1
+crawler-2
+crawler-3
+crawler-mysql
+crawler-redis
 
-Navigate into the project:
+This makes it possible to reproduce the distributed architecture
+locally.
 
-```bash
-cd multithreaded-web-crawler
-```
+🧰 Technology Stack
+
+Technology        Purpose
+
+Java 17           Core programming language
+Spring Boot       Application framework
+Maven             Build and dependency management
+JSoup             HTML parsing and link extraction
+Java HttpClient   HTTP requests
+MySQL 8           Persistent storage
+Redis             Distributed coordination and task distribution
+Redis Streams     Distributed crawl task processing
+Flyway            Database migrations
+Docker            Containerization
+Docker Compose    Multi-container deployment
+Postman           API testing
+
+📁 Project Structure
+
+src/
+└── main/
+    ├── java/
+    │   └── com/
+    │       └── crawler/
+    │           ├── config/
+    │           │   ├── CrawlerControlListener.java
+    │           │   ├── CrawlerControlPublisher.java
+    │           │   └── ...
+    │           │
+    │           ├── controller/
+    │           │
+    │           ├── crawler/
+    │           │   ├── CrawlQueue.java
+    │           │   ├── CrawlTask.java
+    │           │   ├── CrawlerEngine.java
+    │           │   └── Worker.java
+    │           │
+    │           ├── concurrency/
+    │           │   ├── CrawlCoordinator.java
+    │           │   ├── CrawlTaskExecutor.java
+    │           │   └── ThreadPoolConfig.java
+    │           │
+    │           ├── model/
+    │           │   ├── CrawledPage.java
+    │           │   └── UrlStatus.java
+    │           │
+    │           ├── repository/
+    │           │   └── CrawledPageRepository.java
+    │           │
+    │           └── service/
+    │               ├── CrawlerService.java
+    │               ├── ScraperService.java
+    │               ├── UrlCanonicalizer.java
+    │               └── UrlFetcherService.java
+    │
+    └── resources/
+        ├── application.properties
+        └── db/
+            └── migration/
+                └── V1__create_crawled_pages.sql
+
+🔄 Crawling Workflow
+
+The complete crawling process is:
+
+1. Client sends seed URL
+             |
+             v
+2. CrawlerService receives request
+             |
+             v
+3. Seed URL is canonicalized
+             |
+             v
+4. START command is published through Redis
+             |
+             v
+5. Crawler instances receive START
+             |
+             v
+6. CrawlTask is created
+             |
+             v
+7. CrawlCoordinator canonicalizes URL
+             |
+             v
+8. Redis visited-set deduplication
+             |
+             v
+9. URL enters distributed crawl queue
+             |
+             v
+10. Worker fetches URL
+             |
+             v
+11. HTML is parsed with JSoup
+             |
+             +------------------+
+             |                  |
+             v                  v
+       Page saved          Links extracted
+       to MySQL                  |
+                                 v
+                         URL canonicalization
+                                 |
+                                 v
+                         Redis deduplication
+                                 |
+                                 v
+                         New CrawlTask
+                                 |
+                                 v
+                            Continue crawl
+
+🔌 API
+
+The crawler exposes control endpoints under:
+
+/api/crawler
+
+Start Crawling
+
+POST /api/crawler/start?url=https://example.com
+
+Example:
+
+curl -X POST "http://localhost:8080/api/crawler/start?url=https://example.com"
+
+Stop Crawling
+
+POST /api/crawler/stop
+
+Status
+
+Use the project's status endpoint to inspect the current crawler state.
+
+🐳 Running with Docker
 
 Build the project:
 
-```bash
-mvn clean install
-```
+mvn clean package -DskipTests
 
-Run the application:
+Build and start the Docker environment:
 
-```bash
-mvn spring-boot:run
-```
+docker compose up -d --build
 
-The application will start on:
+Check running containers:
 
-```text
-http://localhost:8080
-```
+docker compose ps
 
----
+View crawler logs:
 
-# ⚙️ Configuration
+docker compose logs -f crawler-1
 
-Crawler configuration can be controlled through:
+For all crawler instances:
 
-```text
-application.properties
-```
+docker compose logs -f crawler-1 crawler-2 crawler-3
 
-Example:
+Stop the environment:
 
-```properties
-server.port=8080
+docker compose down
 
-crawler.thread-count=5
-crawler.max-retries=3
-crawler.connection-timeout=10
-crawler.read-timeout=10
-```
+🔍 Useful Redis Commands
 
-The exact configuration depends on the current implementation.
+Check the distributed visited URL set:
 
----
+redis-cli SMEMBERS crawler:visited
 
-# 📊 Example Crawling Scenario
+Count visited URLs:
 
-Suppose the seed URL is:
+redis-cli SCARD crawler:visited
 
-```text
-https://example.com
-```
+Clear the visited set for a fresh crawl:
 
-The crawler starts:
+redis-cli DEL crawler:visited
 
-```text
-Seed URL
-   ↓
-https://example.com
-```
+When Redis is running in Docker, use the Redis container name with
+docker exec.
 
-The page contains:
+🗄️ Database
 
-```text
-/page1
-/page2
-/page3
-```
+Example MySQL query to inspect crawled pages:
 
-The queue becomes:
+SELECT
+    id,
+    url,
+    status,
+    http_status,
+    depth,
+    crawled_at
+FROM crawled_pages
+ORDER BY crawled_at DESC;
 
-```text
-Queue
- ├── /page1
- ├── /page2
- └── /page3
-```
+Count crawled pages:
 
-Three workers can process them concurrently:
+SELECT COUNT(*)
+FROM crawled_pages;
 
-```text
-Worker 1 → /page1
-Worker 2 → /page2
-Worker 3 → /page3
-```
+Inspect content hashes:
 
-Suppose `/page1` contains:
+SELECT
+    url,
+    content_hash
+FROM crawled_pages;
 
-```text
-/page4
-/page5
-```
+🧪 Testing the Distributed Crawler
 
-The queue becomes:
+A useful test is to run multiple crawler instances:
 
-```text
-Queue
- ├── /page4
- └── /page5
-```
+crawler-1
+crawler-2
+crawler-3
 
-The process continues until there are no more URLs to crawl or the configured crawl limits are reached.
+Then start a crawl and inspect the logs:
 
----
+crawler-1 → visiting URL
+crawler-2 → visiting URL
+crawler-3 → visiting URL
 
-# 🧵 Concurrency Model
+The purpose is to verify that:
 
-The crawler follows a producer-consumer style architecture.
+All instances receive the control command.
 
-```text
-                Producer
-                   │
-                   ▼
-          ┌─────────────────┐
-          │   Crawl Queue   │
-          └────────┬────────┘
-                   │
-       ┌───────────┼───────────┐
-       ▼           ▼           ▼
-    Worker 1    Worker 2    Worker 3
-       │           │           │
-       ▼           ▼           ▼
-     Fetch       Fetch       Fetch
-       │           │           │
-       └───────────┼───────────┘
-                   ▼
-              Process HTML
-```
-
-This architecture allows the crawler to process many URLs concurrently while maintaining control over shared resources.
-
----
-
-# ⚠️ Error Handling
-
-The crawler handles failures such as:
-
-### HTTP Errors
-
-```text
-403 Forbidden
-404 Not Found
-429 Too Many Requests
-500 Internal Server Error
-503 Service Unavailable
-```
-
-### Network Errors
-
-```text
-Connection timeout
-Read timeout
-Connection refused
-DNS failure
-```
-
-### Application Errors
-
-```text
-Invalid URL
-HTML parsing failure
-Database failure
-```
-
-Failed URLs are handled without terminating the entire crawling process.
-
----
-
-# 🔐 Responsible Crawling
-
-The crawler should be used responsibly.
-
-When crawling real websites:
-
-* Respect `robots.txt`
-* Respect website terms of service
-* Avoid excessive request rates
-* Implement appropriate delays
-* Handle `429` responses
-* Avoid crawling private or restricted resources
-* Use a meaningful User-Agent
-* Do not overload target servers
-
----
-
-# 🧪 Testing
-
-Run the test suite using:
-
-```bash
-mvn test
-```
-
-Testing can cover:
-
-* URL validation
-* Link extraction
-* HTML parsing
-* Queue behavior
-* Concurrent task execution
-* Retry behavior
-* HTTP failure handling
-* Database persistence
-
----
-
-# 📈 Future Improvements
-
-The project can be extended with:
-
-* [ ] Distributed crawling across multiple machines
-* [ ] Redis-based distributed queue
-* [ ] Distributed visited-set
-* [ ] URL prioritization
-* [ ] Crawl depth limits
-* [ ] Domain restrictions
-* [ ] Robots.txt support
-* [ ] Crawl rate limiting
-* [ ] Proxy support
-* [ ] Metrics and monitoring
-* [ ] Prometheus + Grafana
-* [ ] Dockerization
-* [ ] Kubernetes deployment
-* [ ] Kafka-based task distribution
-* [ ] Distributed database architecture
-* [ ] Elasticsearch for indexed page content
-* [ ] REST API for starting and monitoring crawls
-* [ ] Web dashboard for crawl statistics
-
----
-
-# 🧠 System Design Concepts Demonstrated
-
-This project demonstrates several important system-design and backend concepts:
-
-### 1. Multithreading
+Redis distributes crawling work.
 
 Multiple workers process URLs concurrently.
 
-### 2. Thread Pools
+Canonical URLs are used for deduplication.
 
-A bounded number of worker threads prevents uncontrolled thread creation.
+Duplicate URLs are rejected by Redis.
 
-### 3. Producer-Consumer Pattern
+Crawled records are persisted in MySQL.
 
-URL discovery produces tasks while workers consume them.
+Content hashes are stored with crawled pages.
 
-### 4. Concurrency Control
+🧠 System Design Concepts Demonstrated
 
-Shared state is protected from race conditions.
+This project is intended to demonstrate practical system-design concepts
+rather than only basic web scraping.
 
-### 5. Thread-Safe Data Structures
+Concurrency
 
-Concurrent collections can be used for shared crawler state.
+Thread pools
 
-### 6. Retry & Backoff
+Worker threads
 
-Temporary failures are handled without immediately giving up.
+Thread-safe collections
 
-### 7. Rate Limiting
+Concurrent task processing
 
-Requests can be controlled to avoid overwhelming target servers.
+Distributed Systems
 
-### 8. Persistence
+Multiple crawler instances
 
-Crawl results are stored in a relational database.
+Redis-based coordination
 
-### 9. Fault Tolerance
+Distributed deduplication
 
-Individual URL failures do not necessarily stop the entire crawler.
+Consumer groups
 
-### 10. Scalability
+Message acknowledgement
 
-The worker count can be increased to process more URLs concurrently.
+Pending task recovery
 
-### 11. Separation of Concerns
+Scalability
 
-Fetching, parsing, crawling, persistence and concurrency are separated into different components.
+Horizontal scaling
 
-### 12. Producer-Consumer Architecture
+Stateless crawler instances
 
-The crawl queue decouples URL discovery from URL processing.
+Shared Redis coordination
 
----
+Shared MySQL persistence
 
-# 📌 Key Learning Outcomes
+Data Consistency
 
-Through this project, the following concepts are practiced:
+Redis deduplication
 
-```text
-Java Multithreading
-        ↓
-ExecutorService / Thread Pools
-        ↓
-Concurrent Data Structures
-        ↓
-Producer-Consumer Pattern
-        ↓
-HTTP Networking
-        ↓
-HTML Parsing
-        ↓
-Web Scraping
-        ↓
-Database Persistence
-        ↓
-Concurrency Handling
-        ↓
-Retry & Backoff
-        ↓
-Fault Tolerance
-        ↓
-System Scalability
-```
+Canonical URLs
 
----
+Database uniqueness constraints
 
-# 🎯 Project Goal
+Content hashing
 
-The primary goal of this project is to understand how a real-world crawler can be designed using:
+Reliability
 
-```text
-Multithreading
-+
-Concurrency Control
-+
-HTTP Networking
-+
-HTML Scraping
-+
-Persistent Storage
-+
-Fault Handling
-```
+Redis pending-task handling
 
-rather than implementing a simple single-threaded recursive crawler.
+Worker failure handling
 
----
+Graceful crawler stop
 
-# 👨‍💻 Author
+Database persistence
 
-**Yash Bhatt**
+🎯 Project Goals
 
-B.Tech — Computer Science & Engineering
+The project was built to provide hands-on experience with:
 
-Poornima University
+Java concurrency
 
----
+Spring Boot
 
-## ⭐ If you find this project useful
+Distributed task processing
 
-Give the repository a ⭐ and feel free to explore the implementation.
+Redis
+
+MySQL
+
+Docker
+
+Web scraping
+
+URL canonicalization
+
+Content hashing
+
+Horizontal scaling
+
+Database design
+
+Distributed system architecture
+
+🔮 Possible Future Improvements
+
+Potential future improvements include:
+
+Retry and exponential backoff for HTTP failures
+
+Per-domain rate limiting
+
+Robots.txt support
+
+Better HTTP status handling
+
+Crawl prioritization
+
+URL frontier prioritization
+
+Metrics with Prometheus
+
+Grafana dashboards
+
+Distributed tracing
+
+More advanced content-change detection
+
+Database sharding
+
+Improved failure recovery
+
+Dynamic crawler-instance scaling
+
+Load balancing with Nginx
+
+📌 Project Summary
+
+This project goes beyond a basic single-threaded crawler.
+
+It combines:
+
+                 Web Crawler
+                     |
+       +-------------+-------------+
+       |             |             |
+       v             v             v
+  Multithreading  Redis        MySQL
+       |             |             |
+       v             v             v
+   Workers       Distributed    Persistence
+                 Coordination
+       |             |
+       +------+------+
+              |
+              v
+      Horizontal Scaling
+              |
+              v
+     URL Canonicalization
+              |
+              v
+    Distributed Deduplication
+              |
+              v
+       Content Hashing
+
+The result is a Dockerized, distributed crawler architecture designed to
+demonstrate real-world backend and system-design concepts.

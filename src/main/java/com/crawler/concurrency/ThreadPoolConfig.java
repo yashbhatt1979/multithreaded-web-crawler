@@ -11,8 +11,14 @@ public class ThreadPoolConfig {
 
     private static final int THREAD_POOL_SIZE = 10;
 
-    @Bean
+    @Bean(
+        name = "crawlExecutor",
+        destroyMethod = "shutdown"
+    )
     public ExecutorService crawlExecutor() {
-        return Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+
+        return Executors.newFixedThreadPool(
+                THREAD_POOL_SIZE
+        );
     }
 }

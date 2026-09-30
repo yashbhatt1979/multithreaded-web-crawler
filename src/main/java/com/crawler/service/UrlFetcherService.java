@@ -17,10 +17,7 @@ public class UrlFetcherService {
     private final HttpClient httpClient;
     private final CrawlerConfig crawlerConfig;
 
-    // Maximum number of attempts for one URL
     private static final int MAX_RETRIES = 3;
-
-    // Initial delay before retrying
     private static final long INITIAL_BACKOFF_SECONDS = 2;
 
     public UrlFetcherService(CrawlerConfig crawlerConfig) {
@@ -28,7 +25,9 @@ public class UrlFetcherService {
         this.crawlerConfig = crawlerConfig;
 
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(
+                        crawlerConfig.getRequestTimeoutSeconds()
+                ))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
     }
@@ -54,31 +53,27 @@ public class UrlFetcherService {
                                 + ")"
                 );
 
-                HttpRequest request =
-                        HttpRequest.newBuilder()
-                                .uri(URI.create(url))
-                                .timeout(Duration.ofSeconds(15))
-
-                                .header(
-                                        "User-Agent",
-                                        "MultithreadedWebCrawler/1.0 "
-                                                + "(educational project)"
-                                )
-
-                                .header(
-                                        "Accept",
-                                        "text/html,application/xhtml+xml,"
-                                                + "application/xml;q=0.9,"
-                                                + "*/*;q=0.8"
-                                )
-
-                                .header(
-                                        "Accept-Language",
-                                        "en-US,en;q=0.9"
-                                )
-
-                                .GET()
-                                .build();
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(Duration.ofSeconds(
+                                crawlerConfig.getRequestTimeoutSeconds()
+                        ))
+                        .header(
+                                "User-Agent",
+                                crawlerConfig.getUserAgent()
+                        )
+                        .header(
+                                "Accept",
+                                "text/html,application/xhtml+xml,"
+                                        + "application/xml;q=0.9,"
+                                        + "*/*;q=0.8"
+                        )
+                        .header(
+                                "Accept-Language",
+                                "en-US,en;q=0.9"
+                        )
+                        .GET()
+                        .build();
 
                 HttpResponse<String> response =
                         httpClient.send(
@@ -147,9 +142,6 @@ public class UrlFetcherService {
 
                 /*
                  * SERVER ERROR - 5xx
-                 *
-                 * These errors can also be temporary,
-                 * so retry them with backoff.
                  */
                 if (statusCode >= 500 && statusCode <= 599) {
 
@@ -186,12 +178,7 @@ public class UrlFetcherService {
                 }
 
                 /*
-                 * Other HTTP errors such as:
-                 *
-                 * 400 Bad Request
-                 * 401 Unauthorized
-                 * 403 Forbidden
-                 * 404 Not Found
+                 * Other HTTP errors
                  */
                 throw new FetchFailedException(
                         "Failed to fetch URL. HTTP status: "
@@ -213,16 +200,10 @@ public class UrlFetcherService {
 
             } catch (Exception e) {
 
-                /*
-                 * Network failures can sometimes be temporary.
-                 * Retry them using exponential backoff.
-                 */
-
                 if (attempt > MAX_RETRIES) {
 
                     throw new FetchFailedException(
-                            "Failed to fetch URL: "
-                                    + url
+                            "Failed to fetch URL: " + url
                     );
                 }
 
@@ -263,19 +244,6 @@ public class UrlFetcherService {
         );
     }
 
-    /*
-     * Calculate retry delay.
-     *
-     * First check the server's Retry-After header.
-     *
-     * If it exists:
-     *
-     * Retry-After: 5
-     *
-     * then we wait 5 seconds.
-     *
-     * If it doesn't exist, use exponential backoff.
-     */
     private long calculateRetryDelay(
             HttpResponse<String> response,
             int attempt
@@ -298,7 +266,6 @@ public class UrlFetcherService {
                 }
 
             } catch (NumberFormatException ignored) {
-
                 // Fall back to exponential backoff
             }
         }
@@ -306,33 +273,18 @@ public class UrlFetcherService {
         return calculateExponentialBackoff(attempt);
     }
 
-    /*
-     * Exponential backoff:
-     *
-     * attempt 1 -> 2 seconds
-     * attempt 2 -> 4 seconds
-     * attempt 3 -> 8 seconds
-     */
-    private long calculateExponentialBackoff(
-            int attempt
-    ) {
+    private long calculateExponentialBackoff(int attempt) {
 
         return INITIAL_BACKOFF_SECONDS
                 * (1L << Math.max(0, attempt - 1));
     }
 
-    /*
-     * Pause the current worker thread.
-     */
     private void sleep(long seconds)
             throws InterruptedException {
 
         Thread.sleep(seconds * 1000L);
     }
 
-    /*
-     * Result returned by fetch().
-     */
     public static class FetchResult {
 
         private final String html;

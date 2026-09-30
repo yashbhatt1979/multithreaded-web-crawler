@@ -19,14 +19,15 @@ CREATE TABLE crawled_pages (
 
     status VARCHAR(50) NOT NULL,
 
-    crawled_at TIMESTAMP,
+    crawled_at TIMESTAMP NULL,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
 
-    CONSTRAINT uk_crawled_pages_url_hash UNIQUE (url_hash),
+    CONSTRAINT uk_crawled_pages_url_hash
+        UNIQUE (url_hash),
 
     INDEX idx_crawled_pages_status (status),
 

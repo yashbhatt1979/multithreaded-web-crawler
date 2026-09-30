@@ -31,17 +31,14 @@ public class ScraperService {
             String baseUrl
     ) {
 
-        // 1. Parse HTML
         Document document = htmlParser.parse(html);
 
-        // 2. Extract links
         Set<String> links =
                 linkExtractor.extract(
                         document,
                         baseUrl
                 );
 
-        // 3. Extract useful data
         Map<String, Object> extractedData =
                 dataExtractor.extract(document);
 

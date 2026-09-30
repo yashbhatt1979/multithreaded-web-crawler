@@ -87,6 +87,7 @@ public class CrawledPage {
         this.statusCode = statusCode;
         this.title = title;
         this.content = content;
+        this.contentHash = generateSha256(content);
         this.depth = depth;
         this.status = status;
         this.crawledAt = LocalDateTime.now();
@@ -94,8 +95,11 @@ public class CrawledPage {
 
     private String generateSha256(String value) {
 
-        try {
+        if (value == null) {
+            return null;
+        }
 
+        try {
             MessageDigest digest =
                     MessageDigest.getInstance("SHA-256");
 
@@ -105,7 +109,7 @@ public class CrawledPage {
                     );
 
             StringBuilder hexString =
-                    new StringBuilder();
+                    new StringBuilder(64);
 
             for (byte b : hash) {
 
@@ -177,10 +181,11 @@ public class CrawledPage {
 
     public String getContent() {
         return content;
-    }
+        }
 
     public void setContent(String content) {
         this.content = content;
+        this.contentHash = generateSha256(content);
     }
 
     public Integer getDepth() {
